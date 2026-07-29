@@ -106,7 +106,7 @@ def _clean_repo_name(repo: str) -> str:
 
 class GitHubClient:
     def __init__(self, token: str | None = None, timeout: int = 25) -> None:
-        self.token = token or os.environ.get("GITHUB_TOKEN") or github_cli_token()
+        self.token = normalize_github_token(token or os.environ.get("GITHUB_TOKEN") or github_cli_token())
         self.timeout = timeout
 
     def get_json(self, path_or_url: str, *, allow_404: bool = False) -> Any:
@@ -227,10 +227,17 @@ def github_cli_token() -> str | None:
     except (OSError, subprocess.SubprocessError):
         return None
 
-    token = result.stdout.strip()
+    token = normalize_github_token(result.stdout)
     if result.returncode == 0 and token:
         return token
     return None
+
+
+def normalize_github_token(token: str | None) -> str | None:
+    if not token:
+        return None
+    clean = "".join(char for char in token if not char.isspace() and char.isprintable())
+    return clean or None
 
 
 def scan_repo(client: GitHubClient, repo: RepoRef, limit: int) -> ScanResult:

@@ -18,6 +18,25 @@ function Convert-SecureStringToPlainText([securestring]$SecureString) {
     }
 }
 
+function Normalize-GitHubToken([string]$Token) {
+    if (-not $Token) {
+        return $null
+    }
+
+    $builder = [System.Text.StringBuilder]::new()
+    foreach ($char in $Token.ToCharArray()) {
+        if (-not [char]::IsControl($char) -and -not [char]::IsWhiteSpace($char)) {
+            [void]$builder.Append($char)
+        }
+    }
+
+    $clean = $builder.ToString().Trim()
+    if ($clean) {
+        return $clean
+    }
+    return $null
+}
+
 if ($Clear) {
     if (Test-Path -LiteralPath $TokenFile) {
         Remove-Item -LiteralPath $TokenFile -Force
@@ -41,9 +60,11 @@ Write-Host ""
 
 $secureToken = Read-Host "GitHub token" -AsSecureString
 $plainToken = Convert-SecureStringToPlainText $secureToken
-if (-not $plainToken.Trim()) {
+$cleanToken = Normalize-GitHubToken $plainToken
+if (-not $cleanToken) {
     throw "Token cannot be empty."
 }
+$secureToken = ConvertTo-SecureString $cleanToken -AsPlainText -Force
 
 New-Item -ItemType Directory -Path $ConfigDir -Force | Out-Null
 $secureToken | ConvertFrom-SecureString | Set-Content -LiteralPath $TokenFile -Encoding ASCII

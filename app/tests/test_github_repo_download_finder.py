@@ -6,6 +6,7 @@ from github_repo_download_finder import (
     ScanResult,
     best_url_option,
     format_bytes,
+    normalize_github_token,
     parse_repo_input,
     sanitize_filename,
     select_best_download_option,
@@ -45,6 +46,9 @@ class FormattingTests(unittest.TestCase):
 
     def test_sanitize_filename(self):
         self.assertEqual(sanitize_filename('bad:name?.zip'), "bad_name_.zip")
+
+    def test_normalize_github_token_removes_hidden_whitespace(self):
+        self.assertEqual(normalize_github_token(" ghp_abc\r\n123\t "), "ghp_abc123")
 
 
 class BestUrlTests(unittest.TestCase):

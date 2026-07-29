@@ -74,6 +74,25 @@ function Convert-SecureStringToPlainText([securestring]$SecureString) {
     }
 }
 
+function Normalize-GitHubToken([string]$Token) {
+    if (-not $Token) {
+        return $null
+    }
+
+    $builder = [System.Text.StringBuilder]::new()
+    foreach ($char in $Token.ToCharArray()) {
+        if (-not [char]::IsControl($char) -and -not [char]::IsWhiteSpace($char)) {
+            [void]$builder.Append($char)
+        }
+    }
+
+    $clean = $builder.ToString().Trim()
+    if ($clean) {
+        return $clean
+    }
+    return $null
+}
+
 function Get-DefaultTokenFile {
     if (-not $env:LOCALAPPDATA) {
         return $null
@@ -95,9 +114,7 @@ function Get-StoredGitHubToken {
 
         $secureToken = $encrypted | ConvertTo-SecureString
         $plainToken = Convert-SecureStringToPlainText $secureToken
-        if ($plainToken -and $plainToken.Trim()) {
-            return $plainToken.Trim()
-        }
+        return Normalize-GitHubToken $plainToken
     }
     catch {
         return $null
@@ -124,7 +141,7 @@ function Get-GitHubCliToken {
         try {
             $token = & $executable auth token 2>$null
             if ($LASTEXITCODE -eq 0 -and $token) {
-                $tokenText = ($token -join "`n").Trim()
+                $tokenText = Normalize-GitHubToken ($token -join "`n")
                 if ($tokenText) {
                     return $tokenText
                 }
@@ -143,16 +160,16 @@ function Get-GitHubToken {
     }
 
     $script:GitHubTokenLoaded = $true
-    $token = $env:GITHUB_TOKEN
+    $token = Normalize-GitHubToken $env:GITHUB_TOKEN
 
-    if (-not ($token -and $token.Trim())) {
+    if (-not $token) {
         $token = Get-StoredGitHubToken
     }
-    if (-not ($token -and $token.Trim())) {
+    if (-not $token) {
         $token = Get-GitHubCliToken
     }
-    if ($token -and $token.Trim()) {
-        $script:CachedGitHubToken = $token.Trim()
+    if ($token) {
+        $script:CachedGitHubToken = $token
     }
 
     return $script:CachedGitHubToken
