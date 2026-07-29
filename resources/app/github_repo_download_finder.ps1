@@ -2,6 +2,7 @@ param(
     [string]$Repo,
     [switch]$Versions,
     [switch]$Notes,
+    [Alias("QuickDownload", "InstantDownload")]
     [switch]$DownloadLatest,
     [switch]$BestUrl,
     [switch]$NoMenu,
@@ -46,7 +47,8 @@ Usage:
 Options:
   -Versions          Show releases/tags you can download.
   -Notes             Show the latest release notes or changelog.
-  -DownloadLatest    Download the recommended latest file.
+  -DownloadLatest    Quick download the recommended latest file and exit.
+                     Aliases: -QuickDownload, -InstantDownload.
   -BestUrl           Print only the best latest download URL and exit.
   -NoMenu            Show the summary/latest links without the interactive menu.
   -AuthStatus        Show whether GitHub authentication is configured without printing the token.
@@ -58,6 +60,7 @@ Examples:
   .\github_repo_download_finder.ps1 https://github.com/psf/requests
   .\github_repo_download_finder.ps1 owner/repo -BestUrl
   .\github_repo_download_finder.ps1 owner/repo -Versions
+  .\github_repo_download_finder.ps1 owner/repo -QuickDownload
   .\github_repo_download_finder.ps1 owner/repo -DownloadLatest -OutputDir "$env:USERPROFILE\Downloads"
 
 Authenticate once for private repos or higher rate limits:
@@ -719,9 +722,31 @@ function Format-DownloadOptionLabel($Option, $Recommended) {
     return $Option.Label
 }
 
+function Get-PreferredArchitecture {
+    $arch = ""
+    try {
+        $arch = [System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString().ToLowerInvariant()
+    }
+    catch {
+        $arch = "$env:PROCESSOR_ARCHITECTURE".ToLowerInvariant()
+    }
+
+    if ($arch -match "arm64|aarch64") {
+        return "ARM64"
+    }
+    if ($arch -match "x64|x86_64|amd64") {
+        return "64-bit"
+    }
+    if ($arch -match "x86|i386|i686|386") {
+        return "32-bit"
+    }
+    return ""
+}
+
 function Get-OptionScore($Option) {
     $name = if ($Option.Filename) { $Option.Filename.ToLowerInvariant() } else { "" }
     $label = if ($Option.Label) { $Option.Label.ToLowerInvariant() } else { "" }
+    $preferredArchitecture = Get-PreferredArchitecture
     $score = 0
 
     if ($Option.IsBinary -and -not $Option.IsSource -and -not $Option.IsSupportingFile) {
@@ -739,11 +764,19 @@ function Get-OptionScore($Option) {
     elseif ($Option.Platform -eq "macOS" -or $Option.Platform -eq "Linux") {
         $score -= 20
     }
-    if ($Option.Architecture -eq "64-bit") {
-        $score += 30
+    if ($Option.Architecture -and $preferredArchitecture) {
+        if ($Option.Architecture -eq $preferredArchitecture) {
+            $score += 45
+        }
+        elseif ($Option.Architecture -eq "32-bit") {
+            $score += 5
+        }
+        else {
+            $score -= 35
+        }
     }
-    elseif ($Option.Architecture -eq "ARM64") {
-        $score -= 15
+    elseif ($Option.Architecture -eq "64-bit") {
+        $score += 20
     }
     if ($Option.Kind -eq "installer") {
         $score += 90
@@ -1173,6 +1206,22 @@ function Get-LatestDownloadOption($Scan) {
     return $null
 }
 
+function Save-LatestDownloadOption($Scan, [string]$Folder) {
+    $option = Get-LatestDownloadOption $Scan
+    if ($null -eq $option) {
+        Write-Host "No latest release/tag/default-branch download option found."
+        return $null
+    }
+
+    Write-Host ""
+    Write-Host "Quick download selected:"
+    Write-Host "  $($option.Label)"
+    Write-Host "  $($option.Url)"
+    $saved = Save-DownloadOption $option $Folder
+    Write-Host "Downloaded to: $saved"
+    return $saved
+}
+
 function Start-InteractiveMenu($Scan) {
     while ($true) {
         Write-Host ""
@@ -1180,8 +1229,9 @@ function Start-InteractiveMenu($Scan) {
         Write-Host "  1. Show latest release notes / changelog"
         Write-Host "  2. Show versions you can download"
         Write-Host "  3. Show latest download links"
-        Write-Host "  4. Download a release/tag now"
-        Write-Host "  5. Enter another repo"
+        Write-Host "  4. Quick download recommended latest"
+        Write-Host "  5. Download a release/tag now"
+        Write-Host "  6. Enter another repo"
         Write-Host "  q. Quit"
         $choice = (Read-Host ">").Trim().ToLowerInvariant()
 
@@ -1196,6 +1246,9 @@ function Start-InteractiveMenu($Scan) {
             }
             "3" { Write-LatestDownloadLinks $Scan }
             "4" {
+                Save-LatestDownloadOption $Scan $OutputDir | Out-Null
+            }
+            "5" {
                 $selected = Choose-ReleaseOrTag $Scan $Limit
                 if ($selected) {
                     $option = Choose-DownloadOption (Get-OptionsForChoice $Scan $selected)
@@ -1212,11 +1265,11 @@ function Start-InteractiveMenu($Scan) {
                     Write-Host "Downloaded to: $saved"
                 }
             }
-            "5" { return "again" }
+            "6" { return "again" }
             "q" { return "quit" }
             "quit" { return "quit" }
             "exit" { return "quit" }
-            default { Write-Host "Choose 1, 2, 3, 4, 5, or q." }
+            default { Write-Host "Choose 1, 2, 3, 4, 5, 6, or q." }
         }
     }
 }
@@ -1244,14 +1297,7 @@ function Invoke-RunOnce([string]$RepoText) {
         Write-LatestDownloadLinks $scan
     }
     if ($DownloadLatest) {
-        $option = Get-LatestDownloadOption $scan
-        if ($null -eq $option) {
-            Write-Host "No latest release/tag/default-branch download option found."
-        }
-        else {
-            $saved = Save-DownloadOption $option $OutputDir
-            Write-Host "Downloaded to: $saved"
-        }
+        Save-LatestDownloadOption $scan $OutputDir | Out-Null
     }
 
     if ($actionMode) {

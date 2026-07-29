@@ -6,6 +6,7 @@ from github_repo_download_finder import (
     ScanResult,
     best_url_option,
     format_bytes,
+    latest_download_option,
     normalize_github_token,
     parse_repo_input,
     sanitize_filename,
@@ -71,6 +72,24 @@ class BestUrlTests(unittest.TestCase):
         )
 
         self.assertEqual(best_url_option(scan).filename, "repo-main.zip")
+
+    def test_quick_download_uses_recommended_asset(self):
+        scan = ScanResult(
+            repo=RepoRef("owner", "repo"),
+            info={"default_branch": "main"},
+            latest_release={
+                "tag_name": "v1.0",
+                "assets": [
+                    {"name": "tool-source.zip", "browser_download_url": "https://example.com/source", "size": 1},
+                    {"name": "tool-windows-x64.exe", "browser_download_url": "https://example.com/installer", "size": 1},
+                ],
+                "zipball_url": "https://example.com/zipball",
+            },
+            releases=[],
+            tags=[],
+        )
+
+        self.assertEqual(latest_download_option(scan).url, "https://example.com/installer")
 
 
 if __name__ == "__main__":

@@ -13,6 +13,7 @@ import base64
 from dataclasses import dataclass
 import json
 import os
+import platform
 from pathlib import Path
 import re
 import shutil
@@ -605,8 +606,9 @@ def interactive_menu(client: GitHubClient, scan: ScanResult, output_dir: Path, l
         print("  1. Show latest release notes / changelog")
         print("  2. Show versions you can download")
         print("  3. Show latest download links")
-        print("  4. Download a release/tag now")
-        print("  5. Enter another repo")
+        print("  4. Quick download recommended latest")
+        print("  5. Download a release/tag now")
+        print("  6. Enter another repo")
         print("  q. Quit")
         choice = input("> ").strip().lower()
 
@@ -621,6 +623,8 @@ def interactive_menu(client: GitHubClient, scan: ScanResult, output_dir: Path, l
         elif choice == "3":
             print_latest_download_links(scan)
         elif choice == "4":
+            save_latest_download_option(client, scan, output_dir)
+        elif choice == "5":
             selected = choose_release_or_tag(scan, limit)
             if selected is None:
                 branch = scan.info.get("default_branch")
@@ -634,12 +638,12 @@ def interactive_menu(client: GitHubClient, scan: ScanResult, output_dir: Path, l
             if option:
                 saved = client.download(option, output_dir)
                 print(f"Downloaded to: {saved}")
-        elif choice == "5":
+        elif choice == "6":
             return "again"
         elif choice in {"q", "quit", "exit"}:
             return "quit"
         else:
-            print("Choose 1, 2, 3, 4, 5, or q.")
+            print("Choose 1, 2, 3, 4, 5, 6, or q.")
 
 
 def run_once(args: argparse.Namespace, client: GitHubClient, repo_text: str) -> str:
@@ -666,27 +670,36 @@ def run_once(args: argparse.Namespace, client: GitHubClient, repo_text: str) -> 
     if args.no_menu:
         print_latest_download_links(scan)
     if args.download_latest:
-        option = latest_download_option(scan)
-        if option is None:
-            print("No latest release/tag/default-branch download option found.")
-        else:
-            saved = client.download(option, output_dir)
-            print(f"Downloaded to: {saved}")
+        save_latest_download_option(client, scan, output_dir)
 
     if action_mode:
         return "done"
     return interactive_menu(client, scan, output_dir, args.limit)
 
 
+def save_latest_download_option(client: GitHubClient, scan: ScanResult, output_dir: Path) -> Path | None:
+    option = latest_download_option(scan)
+    if option is None:
+        print("No latest release/tag/default-branch download option found.")
+        return None
+
+    print()
+    print("Quick download selected:")
+    print(f"  {option.label}")
+    print(f"  {option.url}")
+    saved = client.download(option, output_dir)
+    print(f"Downloaded to: {saved}")
+    return saved
+
+
 def latest_download_option(scan: ScanResult) -> DownloadOption | None:
     if scan.latest_release:
         options = release_download_options(scan.repo, scan.latest_release)
-        source_zip = next((option for option in options if option.label == "Source ZIP"), None)
-        return source_zip or (options[0] if options else None)
+        return select_best_download_option(options)
 
     if scan.tags:
         options = tag_download_options(scan.repo, scan.tags[0])
-        return options[0] if options else None
+        return select_best_download_option(options)
 
     branch = scan.info.get("default_branch")
     if branch:
@@ -694,9 +707,21 @@ def latest_download_option(scan: ScanResult) -> DownloadOption | None:
     return None
 
 
+def preferred_architecture() -> str:
+    arch = platform.machine().lower()
+    if re.search(r"arm64|aarch64", arch):
+        return "arm64"
+    if re.search(r"x64|x86_64|amd64", arch):
+        return "x64"
+    if re.search(r"x86|i386|i686|386", arch):
+        return "x86"
+    return ""
+
+
 def option_score(option: DownloadOption) -> int:
     name = option.filename.lower()
     label = option.label.lower()
+    preferred_arch = preferred_architecture()
     score = 0
 
     if label.startswith("asset "):
@@ -707,10 +732,23 @@ def option_score(option: DownloadOption) -> int:
         score += 45
     if re.search(r"(windows|win32|win64|win-|_win|\.win)", name):
         score += 40
-    if re.search(r"(x64|x86_64|amd64)", name):
-        score += 25
-    if re.search(r"(arm64|aarch64|armv7)", name):
-        score -= 25
+    asset_arch = ""
+    if re.search(r"(arm64|aarch64)", name):
+        asset_arch = "arm64"
+    elif re.search(r"(x64|x86_64|amd64)", name):
+        asset_arch = "x64"
+    elif re.search(r"(^|[-_.])x86([-_.]|$)|(^|[-_.])386([-_.]|$)|i386|i686", name):
+        asset_arch = "x86"
+
+    if asset_arch and preferred_arch:
+        if asset_arch == preferred_arch:
+            score += 45
+        elif asset_arch == "x86":
+            score += 5
+        else:
+            score -= 35
+    elif asset_arch == "x64":
+        score += 20
     if re.search(r"(sha256|sha512|checksum|checksums|\.sig|\.asc|sbom|symbols|debug)", name):
         score -= 120
     if label == "source zip":
@@ -748,7 +786,14 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument("repo", nargs="?", help="GitHub repository URL, SSH URL, or owner/repo")
     parser.add_argument("--versions", action="store_true", help="Print available releases/tags and exit")
     parser.add_argument("--notes", action="store_true", help="Print latest release notes/changelog and exit")
-    parser.add_argument("--download-latest", action="store_true", help="Download the latest source ZIP and exit")
+    parser.add_argument(
+        "--download-latest",
+        "--quick-download",
+        "--instant-download",
+        dest="download_latest",
+        action="store_true",
+        help="Quick download the recommended latest file and exit",
+    )
     parser.add_argument("--best-url", action="store_true", help="Print only the best latest download URL and exit")
     parser.add_argument("--no-menu", action="store_true", help="Print summary/latest links without the interactive menu")
     parser.add_argument("--limit", type=int, default=30, help="Maximum releases/tags to scan, up to 100")

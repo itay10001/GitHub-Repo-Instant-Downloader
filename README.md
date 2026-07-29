@@ -140,6 +140,12 @@ Download the recommended latest file into `downloads`:
 powershell -ExecutionPolicy Bypass -File .\resources\app\github_repo_download_finder.ps1 owner/repo -DownloadLatest
 ```
 
+Same instant download, with a clearer name:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\resources\app\github_repo_download_finder.ps1 owner/repo -QuickDownload
+```
+
 Print only one URL for shortcuts/automation:
 
 ```powershell
