@@ -871,11 +871,18 @@ function Get-UniquePath([string]$Path) {
     throw "Could not choose a unique filename for $Path"
 }
 
+function Get-DownloadHeaders([string]$Url) {
+    if ($Url -match "^https://api\.github\.com/repos/.+/(zipball|tarball)(/|$)") {
+        return New-GitHubHeaders
+    }
+    return New-GitHubHeaders "application/octet-stream"
+}
+
 function Save-DownloadOption($Option, [string]$Folder) {
     $directory = New-Item -ItemType Directory -Path $Folder -Force
     $safeName = Sanitize-Filename $Option.Filename
     $target = Get-UniquePath (Join-Path $directory.FullName $safeName)
-    Invoke-WebRequest -Uri $Option.Url -Headers (New-GitHubHeaders "application/octet-stream") -OutFile $target -TimeoutSec 120
+    Invoke-WebRequest -Uri $Option.Url -Headers (Get-DownloadHeaders $Option.Url) -OutFile $target -TimeoutSec 120
     return (Resolve-Path -LiteralPath $target).Path
 }
 

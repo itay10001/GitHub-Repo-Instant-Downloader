@@ -157,7 +157,7 @@ class GitHubClient:
     def download(self, option: DownloadOption, output_dir: Path) -> Path:
         output_dir.mkdir(parents=True, exist_ok=True)
         target = unique_path(output_dir / sanitize_filename(option.filename))
-        request = self._make_request(option.url, accept="application/octet-stream")
+        request = self._make_request(option.url, accept=download_accept_header(option.url))
 
         try:
             with urlopen(request, timeout=self.timeout) as response, target.open("wb") as file:
@@ -475,6 +475,12 @@ def branch_archive_url(repo: RepoRef, branch: str, extension: str) -> str:
 
 def branch_api_archive_url(repo: RepoRef, branch: str, kind: str) -> str:
     return f"{API_ROOT}/repos/{repo.owner}/{repo.repo}/{kind}/{quote(branch, safe='')}"
+
+
+def download_accept_header(url: str) -> str:
+    if re.match(r"^https://api\.github\.com/repos/.+/(zipball|tarball)(/|$)", url):
+        return "application/vnd.github+json"
+    return "application/octet-stream"
 
 
 def format_bytes(value: Any) -> str:
