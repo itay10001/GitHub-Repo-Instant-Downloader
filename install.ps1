@@ -90,6 +90,8 @@ function Copy-AppFiles([string]$SourceRoot, [string]$TargetRoot) {
     $items = @(
         "app",
         "hotkey",
+        "Install.bat",
+        "Uninstall.bat",
         "GitHub Repo Downloader.bat",
         "auth.ps1",
         "README.md",

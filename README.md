@@ -26,7 +26,13 @@ This tool checks those paths for you and puts the useful choices in one terminal
 
 ## Install The Ctrl+Alt+G Hotkey
 
-Run the setup script from this folder:
+For the normal Windows install, double-click:
+
+```text
+Install.bat
+```
+
+Do not double-click `install.ps1`; Windows may open PowerShell scripts in Notepad. If you prefer PowerShell, run this from the extracted folder:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\install.ps1
@@ -55,6 +61,12 @@ powershell -ExecutionPolicy Bypass -File .\install.ps1 -Hotkey "^!d"
 ```
 
 To uninstall the hotkey and installed app copy:
+
+```text
+Uninstall.bat
+```
+
+Or from PowerShell:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\uninstall.ps1
@@ -90,8 +102,8 @@ GitHub Repo Downloader.bat
 
 For the full hotkey experience, tell them to run:
 
-```powershell
-powershell -ExecutionPolicy Bypass -File .\install.ps1
+```text
+Install.bat
 ```
 
 The files inside `app` are the background machinery, so they should stay in the folder but your friends do not need to open them.
