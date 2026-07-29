@@ -21,6 +21,14 @@ $ChangelogCandidates = @(
     "RELEASES.md",
     "docs/CHANGELOG.md"
 )
+$InstallScriptCandidates = @(
+    "install.ps1",
+    "setup.ps1",
+    "install.bat",
+    "setup.bat",
+    "install.cmd",
+    "setup.cmd"
+)
 
 function Show-Help {
     @"
@@ -173,6 +181,10 @@ function Scan-Repo($RepoRef, [int]$MaxItems) {
     $info = Invoke-GitHubJson "/repos/$($RepoRef.Owner)/$($RepoRef.Repo)"
     $latest = Invoke-GitHubJson "/repos/$($RepoRef.Owner)/$($RepoRef.Repo)/releases/latest" -Allow404
     $perPage = [Math]::Min($MaxItems, 100)
+    $installScript = $null
+    if ($info.default_branch) {
+        $installScript = Find-InstallScript $RepoRef $info.default_branch
+    }
 
     $releaseData = Invoke-GitHubJson "/repos/$($RepoRef.Owner)/$($RepoRef.Repo)/releases?per_page=$perPage"
     $releases = @()
@@ -196,6 +208,7 @@ function Scan-Repo($RepoRef, [int]$MaxItems) {
         LatestRelease = $latest
         Releases = $releases
         Tags = $tags
+        InstallScript = $installScript
     }
 }
 
@@ -327,6 +340,7 @@ function New-DownloadOption([string]$Label, [string]$Url, [string]$Filename, $Tr
         IsBinary = $Traits.IsBinary
         IsSupportingFile = $Traits.IsSupportingFile
         DeveloperOnly = $Traits.DeveloperOnly
+        IsInstallableProject = if ($Traits.PSObject.Properties.Name -contains "IsInstallableProject") { $Traits.IsInstallableProject } else { $false }
     }
 }
 
@@ -348,6 +362,21 @@ function New-AssetDownloadOption($Asset) {
 function New-SourceDownloadOption([string]$Kind, [string]$Url, [string]$Filename) {
     $traits = Get-AssetTraits $Filename $true
     $label = "Source code $Kind - developers only"
+    return New-DownloadOption $label $Url $Filename $traits
+}
+
+function New-InstallableProjectDownloadOption([string]$Kind, [string]$Url, [string]$Filename, [string]$InstallScript) {
+    $traits = [pscustomobject]@{
+        Platform = "Windows"
+        Architecture = ""
+        Kind = "installable project archive"
+        IsSource = $false
+        IsBinary = $true
+        IsSupportingFile = $false
+        DeveloperOnly = $false
+        IsInstallableProject = $true
+    }
+    $label = "Installable project $Kind - includes $InstallScript"
     return New-DownloadOption $label $Url $Filename $traits
 }
 
@@ -375,7 +404,7 @@ function Get-BranchApiArchiveUrl($RepoRef, [string]$Branch, [string]$Kind) {
     return "$ApiRoot/repos/$($RepoRef.Owner)/$($RepoRef.Repo)/$Kind/$encoded"
 }
 
-function Get-ReleaseDownloadOptions($RepoRef, $Release) {
+function Get-ReleaseDownloadOptions($RepoRef, $Release, [string]$InstallScript = "") {
     $options = @()
     foreach ($asset in @($Release.assets)) {
         if ($asset.browser_download_url) {
@@ -385,7 +414,12 @@ function Get-ReleaseDownloadOptions($RepoRef, $Release) {
 
     $tag = if ($Release.tag_name) { $Release.tag_name } else { "source" }
     if ($Release.zipball_url) {
-        $options += New-SourceDownloadOption "ZIP" $Release.zipball_url "$($RepoRef.Repo)-$tag.zip"
+        if ($InstallScript) {
+            $options += New-InstallableProjectDownloadOption "ZIP" $Release.zipball_url "$($RepoRef.Repo)-$tag.zip" $InstallScript
+        }
+        else {
+            $options += New-SourceDownloadOption "ZIP" $Release.zipball_url "$($RepoRef.Repo)-$tag.zip"
+        }
     }
     if ($Release.tarball_url) {
         $options += New-SourceDownloadOption "TAR.GZ" $Release.tarball_url "$($RepoRef.Repo)-$tag.tar.gz"
@@ -393,11 +427,16 @@ function Get-ReleaseDownloadOptions($RepoRef, $Release) {
     return @($options)
 }
 
-function Get-TagDownloadOptions($RepoRef, $Tag) {
+function Get-TagDownloadOptions($RepoRef, $Tag, [string]$InstallScript = "") {
     $name = if ($Tag.name) { $Tag.name } else { "tag" }
     $options = @()
     if ($Tag.zipball_url) {
-        $options += New-SourceDownloadOption "ZIP" $Tag.zipball_url "$($RepoRef.Repo)-$name.zip"
+        if ($InstallScript) {
+            $options += New-InstallableProjectDownloadOption "ZIP" $Tag.zipball_url "$($RepoRef.Repo)-$name.zip" $InstallScript
+        }
+        else {
+            $options += New-SourceDownloadOption "ZIP" $Tag.zipball_url "$($RepoRef.Repo)-$name.zip"
+        }
     }
     if ($Tag.tarball_url) {
         $options += New-SourceDownloadOption "TAR.GZ" $Tag.tarball_url "$($RepoRef.Repo)-$name.tar.gz"
@@ -405,9 +444,18 @@ function Get-TagDownloadOptions($RepoRef, $Tag) {
     return @($options)
 }
 
-function Get-BranchDownloadOptions($RepoRef, [string]$Branch) {
+function Get-BranchDownloadOptions($RepoRef, [string]$Branch, [string]$InstallScript = "") {
+    $zipUrl = Get-BranchApiArchiveUrl $RepoRef $Branch "zipball"
+    $zipFilename = "$($RepoRef.Repo)-$Branch.zip"
+    $zipOption = if ($InstallScript) {
+        New-InstallableProjectDownloadOption "ZIP" $zipUrl $zipFilename $InstallScript
+    }
+    else {
+        New-SourceDownloadOption "ZIP" $zipUrl $zipFilename
+    }
+
     return @(
-        (New-SourceDownloadOption "ZIP" (Get-BranchApiArchiveUrl $RepoRef $Branch "zipball") "$($RepoRef.Repo)-$Branch.zip"),
+        $zipOption,
         (New-SourceDownloadOption "TAR.GZ" (Get-BranchApiArchiveUrl $RepoRef $Branch "tarball") "$($RepoRef.Repo)-$Branch.tar.gz")
     )
 }
@@ -466,19 +514,19 @@ function Write-LatestDownloadLinks($Scan) {
     Write-Host ""
     if ($Scan.LatestRelease) {
         Write-Host "Download links for $(Release-Label $Scan.LatestRelease)"
-        Write-DownloadOptions (Get-ReleaseDownloadOptions $Scan.Repo $Scan.LatestRelease)
+        Write-DownloadOptions (Get-ReleaseDownloadOptions $Scan.Repo $Scan.LatestRelease $Scan.InstallScript)
         return
     }
 
     if ($Scan.Tags.Count -gt 0) {
         Write-Host "Download links for newest tag: $($Scan.Tags[0].name)"
-        Write-DownloadOptions (Get-TagDownloadOptions $Scan.Repo $Scan.Tags[0])
+        Write-DownloadOptions (Get-TagDownloadOptions $Scan.Repo $Scan.Tags[0] $Scan.InstallScript)
         return
     }
 
     if ($Scan.Info.default_branch) {
         Write-Host "Download link for the default branch"
-        Write-DownloadOptions (Get-BranchDownloadOptions $Scan.Repo $Scan.Info.default_branch)
+        Write-DownloadOptions (Get-BranchDownloadOptions $Scan.Repo $Scan.Info.default_branch $Scan.InstallScript)
     }
 }
 
@@ -527,6 +575,9 @@ function Get-OptionScore($Option) {
     elseif ($Option.Kind -eq "portable/archive") {
         $score += 45
     }
+    elseif ($Option.Kind -eq "installable project archive") {
+        $score += 70
+    }
     if ($name -match "(sha256|sha512|checksum|checksums|\.sig|\.asc|sbom|symbols|debug)") {
         $score -= 120
     }
@@ -572,21 +623,21 @@ function Select-RecommendedDownloadOption($Options) {
 
 function Get-BestUrlOption($Scan) {
     if ($Scan.LatestRelease) {
-        $option = Select-RecommendedDownloadOption (Get-ReleaseDownloadOptions $Scan.Repo $Scan.LatestRelease)
+        $option = Select-RecommendedDownloadOption (Get-ReleaseDownloadOptions $Scan.Repo $Scan.LatestRelease $Scan.InstallScript)
         if ($null -ne $option) {
             return $option
         }
     }
 
     if ($Scan.Tags.Count -gt 0) {
-        $option = Select-RecommendedDownloadOption (Get-TagDownloadOptions $Scan.Repo $Scan.Tags[0])
+        $option = Select-RecommendedDownloadOption (Get-TagDownloadOptions $Scan.Repo $Scan.Tags[0] $Scan.InstallScript)
         if ($null -ne $option) {
             return $option
         }
     }
 
     if ($Scan.Info.default_branch) {
-        return (Get-BranchDownloadOptions $Scan.Repo $Scan.Info.default_branch)[0]
+        return (Get-BranchDownloadOptions $Scan.Repo $Scan.Info.default_branch $Scan.InstallScript)[0]
     }
     return $null
 }
@@ -643,6 +694,16 @@ function Find-Changelog($RepoRef, [string]$DefaultBranch) {
         $text = Get-FileText $RepoRef $path $DefaultBranch
         if ($text) {
             return [pscustomobject]@{ Name = $path; Text = $text }
+        }
+    }
+    return $null
+}
+
+function Find-InstallScript($RepoRef, [string]$DefaultBranch) {
+    foreach ($path in $InstallScriptCandidates) {
+        $text = Get-FileText $RepoRef $path $DefaultBranch
+        if ($null -ne $text) {
+            return $path
         }
     }
     return $null
@@ -852,9 +913,9 @@ function Choose-ReleaseOrTag($Scan, [int]$MaxItems) {
 
 function Get-OptionsForChoice($Scan, $Choice) {
     if ($Choice.Kind -eq "release") {
-        return Get-ReleaseDownloadOptions $Scan.Repo $Choice.Item
+        return Get-ReleaseDownloadOptions $Scan.Repo $Choice.Item $Scan.InstallScript
     }
-    return Get-TagDownloadOptions $Scan.Repo $Choice.Item
+    return Get-TagDownloadOptions $Scan.Repo $Choice.Item $Scan.InstallScript
 }
 
 function Choose-DownloadOption($Options) {
@@ -887,7 +948,7 @@ function Choose-DownloadOption($Options) {
 
 function Get-LatestDownloadOption($Scan) {
     if ($Scan.LatestRelease) {
-        $options = @(Get-ReleaseDownloadOptions $Scan.Repo $Scan.LatestRelease)
+        $options = @(Get-ReleaseDownloadOptions $Scan.Repo $Scan.LatestRelease $Scan.InstallScript)
         $recommended = Select-RecommendedDownloadOption $options
         if ($null -ne $recommended) {
             return $recommended
@@ -895,7 +956,7 @@ function Get-LatestDownloadOption($Scan) {
     }
 
     if ($Scan.Tags.Count -gt 0) {
-        $options = @(Get-TagDownloadOptions $Scan.Repo $Scan.Tags[0])
+        $options = @(Get-TagDownloadOptions $Scan.Repo $Scan.Tags[0] $Scan.InstallScript)
         $recommended = Select-RecommendedDownloadOption $options
         if ($null -ne $recommended) {
             return $recommended
@@ -903,7 +964,7 @@ function Get-LatestDownloadOption($Scan) {
     }
 
     if ($Scan.Info.default_branch) {
-        return (Get-BranchDownloadOptions $Scan.Repo $Scan.Info.default_branch)[0]
+        return (Get-BranchDownloadOptions $Scan.Repo $Scan.Info.default_branch $Scan.InstallScript)[0]
     }
     return $null
 }
@@ -936,7 +997,7 @@ function Start-InteractiveMenu($Scan) {
                     $option = Choose-DownloadOption (Get-OptionsForChoice $Scan $selected)
                 }
                 elseif ($Scan.Info.default_branch -and $Scan.Releases.Count -eq 0 -and $Scan.Tags.Count -eq 0) {
-                    $option = Choose-DownloadOption (Get-BranchDownloadOptions $Scan.Repo $Scan.Info.default_branch)
+                    $option = Choose-DownloadOption (Get-BranchDownloadOptions $Scan.Repo $Scan.Info.default_branch $Scan.InstallScript)
                 }
                 else {
                     $option = $null
