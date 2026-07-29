@@ -15,9 +15,4 @@ if not exist "%SCRIPT%" (
     exit /b 1
 )
 
-where wt.exe >nul 2>nul
-if %errorlevel%==0 (
-    start "" wt.exe new-tab --title "%WINDOW_TITLE%" -d "%~dp0" powershell.exe -NoProfile -ExecutionPolicy Bypass -NoExit -File "%SCRIPT%" %*
-) else (
-    start "%WINDOW_TITLE%" /D "%~dp0" powershell.exe -NoProfile -ExecutionPolicy Bypass -NoExit -File "%SCRIPT%" %*
-)
+start "%WINDOW_TITLE%" /D "%~dp0" powershell.exe -NoProfile -ExecutionPolicy Bypass -NoExit -File "%SCRIPT%" %*
