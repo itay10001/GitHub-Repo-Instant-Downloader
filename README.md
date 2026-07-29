@@ -152,6 +152,12 @@ powershell -ExecutionPolicy Bypass -File .\auth.ps1
 
 It prompts for a GitHub token inside PowerShell and saves it encrypted for your Windows user at `%LOCALAPPDATA%\GitHubRepoDownloadFinder\github_token.securestring`. Use the least permissions possible: public repo/rate-limit use does not need write access, and private repos only need read-only access to the repos you want. Do not paste tokens into chat or commit them to GitHub.
 
+If you are running from old Command Prompt and paste does not work, copy the token from GitHub and run:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\auth.ps1 -FromClipboard
+```
+
 To remove the saved token:
 
 ```powershell

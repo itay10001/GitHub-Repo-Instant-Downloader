@@ -1,5 +1,6 @@
 param(
     [string]$ConfigDir = (Join-Path $env:LOCALAPPDATA "GitHubRepoDownloadFinder"),
+    [switch]$FromClipboard,
     [switch]$Clear
 )
 
@@ -44,6 +45,20 @@ function Test-GitHubTokenShape([string]$Token) {
     return $Token -match "^(github_pat_|ghp_|gho_|ghu_|ghs_|ghr_)"
 }
 
+function Save-GitHubToken([string]$Token) {
+    $cleanToken = Normalize-GitHubToken $Token
+    if (-not $cleanToken) {
+        throw "Token cannot be empty. If you are in Command Prompt and only saw one *, Ctrl+V probably did not paste. Use right-click, Shift+Insert, or run auth.ps1 -FromClipboard."
+    }
+    if (-not (Test-GitHubTokenShape $cleanToken)) {
+        throw "That does not look like a GitHub token. Copy the token value from GitHub, not the token name."
+    }
+
+    $secureToken = ConvertTo-SecureString $cleanToken -AsPlainText -Force
+    New-Item -ItemType Directory -Path $ConfigDir -Force | Out-Null
+    $secureToken | ConvertFrom-SecureString | Set-Content -LiteralPath $TokenFile -Encoding ASCII
+}
+
 if ($Clear) {
     if (Test-Path -LiteralPath $TokenFile) {
         Remove-Item -LiteralPath $TokenFile -Force
@@ -65,19 +80,19 @@ Write-Host "Use the least permissions possible. Public repo/rate-limit use does 
 Write-Host "need write access. Private repos need read-only access to the repos you want."
 Write-Host ""
 
-$secureToken = Read-Host "GitHub token" -AsSecureString
-$plainToken = Convert-SecureStringToPlainText $secureToken
-$cleanToken = Normalize-GitHubToken $plainToken
-if (-not $cleanToken) {
-    throw "Token cannot be empty."
+if ($FromClipboard) {
+    $clipboardToken = Get-Clipboard -Raw
+    Save-GitHubToken $clipboardToken
 }
-if (-not (Test-GitHubTokenShape $cleanToken)) {
-    throw "That does not look like a GitHub token. Copy the token value from GitHub, not the token name."
-}
-$secureToken = ConvertTo-SecureString $cleanToken -AsPlainText -Force
+else {
+    Write-Host "Paste tip: in old Command Prompt, Ctrl+V may enter one hidden character"
+    Write-Host "instead of pasting. Use right-click, Shift+Insert, or run with -FromClipboard."
+    Write-Host ""
 
-New-Item -ItemType Directory -Path $ConfigDir -Force | Out-Null
-$secureToken | ConvertFrom-SecureString | Set-Content -LiteralPath $TokenFile -Encoding ASCII
+    $secureToken = Read-Host "GitHub token" -AsSecureString
+    $plainToken = Convert-SecureStringToPlainText $secureToken
+    Save-GitHubToken $plainToken
+}
 
 Write-Host ""
 Write-Host "Saved GitHub token for this Windows user."
