@@ -37,6 +37,13 @@ function Normalize-GitHubToken([string]$Token) {
     return $null
 }
 
+function Test-GitHubTokenShape([string]$Token) {
+    if (-not $Token -or $Token.Length -lt 20) {
+        return $false
+    }
+    return $Token -match "^(github_pat_|ghp_|gho_|ghu_|ghs_|ghr_)"
+}
+
 if ($Clear) {
     if (Test-Path -LiteralPath $TokenFile) {
         Remove-Item -LiteralPath $TokenFile -Force
@@ -63,6 +70,9 @@ $plainToken = Convert-SecureStringToPlainText $secureToken
 $cleanToken = Normalize-GitHubToken $plainToken
 if (-not $cleanToken) {
     throw "Token cannot be empty."
+}
+if (-not (Test-GitHubTokenShape $cleanToken)) {
+    throw "That does not look like a GitHub token. Copy the token value from GitHub, not the token name."
 }
 $secureToken = ConvertTo-SecureString $cleanToken -AsPlainText -Force
 

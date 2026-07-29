@@ -5,6 +5,7 @@ param(
     [switch]$DownloadLatest,
     [switch]$BestUrl,
     [switch]$NoMenu,
+    [switch]$AuthStatus,
     [switch]$Help,
     [int]$Limit = 30,
     [string]$OutputDir = "downloads"
@@ -31,6 +32,9 @@ $InstallScriptCandidates = @(
 )
 $script:GitHubTokenLoaded = $false
 $script:CachedGitHubToken = $null
+$script:GitHubTokenSource = "none"
+$script:StoredTokenError = $null
+$script:GitHubCliTokenError = $null
 
 function Show-Help {
     @"
@@ -45,6 +49,7 @@ Options:
   -DownloadLatest    Download the recommended latest file.
   -BestUrl           Print only the best latest download URL and exit.
   -NoMenu            Show the summary/latest links without the interactive menu.
+  -AuthStatus        Show whether GitHub authentication is configured without printing the token.
   -Limit 30          Maximum releases/tags to scan, up to 100.
   -OutputDir path    Folder for downloaded files.
   -Help              Show this help.
@@ -101,6 +106,7 @@ function Get-DefaultTokenFile {
 }
 
 function Get-StoredGitHubToken {
+    $script:StoredTokenError = $null
     $tokenFile = Get-DefaultTokenFile
     if (-not $tokenFile -or -not (Test-Path -LiteralPath $tokenFile)) {
         return $null
@@ -109,14 +115,20 @@ function Get-StoredGitHubToken {
     try {
         $encrypted = (Get-Content -LiteralPath $tokenFile -Raw).Trim()
         if (-not $encrypted) {
+            $script:StoredTokenError = "Saved token file is empty."
             return $null
         }
 
         $secureToken = $encrypted | ConvertTo-SecureString
         $plainToken = Convert-SecureStringToPlainText $secureToken
-        return Normalize-GitHubToken $plainToken
+        $token = Normalize-GitHubToken $plainToken
+        if (-not $token) {
+            $script:StoredTokenError = "Saved token is empty after cleaning."
+        }
+        return $token
     }
     catch {
+        $script:StoredTokenError = $_.Exception.Message
         return $null
     }
 
@@ -124,6 +136,7 @@ function Get-StoredGitHubToken {
 }
 
 function Get-GitHubCliToken {
+    $script:GitHubCliTokenError = $null
     foreach ($name in @("gh.exe", "gh")) {
         $command = Get-Command $name -ErrorAction SilentlyContinue | Select-Object -First 1
         if (-not $command) {
@@ -148,6 +161,7 @@ function Get-GitHubCliToken {
             }
         }
         catch {
+            $script:GitHubCliTokenError = $_.Exception.Message
         }
     }
 
@@ -160,19 +174,69 @@ function Get-GitHubToken {
     }
 
     $script:GitHubTokenLoaded = $true
+    $script:GitHubTokenSource = "none"
     $token = Normalize-GitHubToken $env:GITHUB_TOKEN
+    if ($token) {
+        $script:GitHubTokenSource = "GITHUB_TOKEN"
+    }
 
     if (-not $token) {
         $token = Get-StoredGitHubToken
+        if ($token) {
+            $script:GitHubTokenSource = "saved token"
+        }
     }
     if (-not $token) {
         $token = Get-GitHubCliToken
+        if ($token) {
+            $script:GitHubTokenSource = "GitHub CLI"
+        }
     }
     if ($token) {
         $script:CachedGitHubToken = $token
     }
 
     return $script:CachedGitHubToken
+}
+
+function Show-AuthStatus {
+    $tokenFile = Get-DefaultTokenFile
+    $envToken = Normalize-GitHubToken $env:GITHUB_TOKEN
+    $storedExists = $tokenFile -and (Test-Path -LiteralPath $tokenFile)
+    $storedToken = Get-StoredGitHubToken
+    $ghCommand = Get-Command "gh.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
+    if (-not $ghCommand) {
+        $ghCommand = Get-Command "gh" -ErrorAction SilentlyContinue | Select-Object -First 1
+    }
+    $ghToken = Get-GitHubCliToken
+    $activeToken = Get-GitHubToken
+
+    Write-Host "GitHub authentication status"
+    Write-Host "  Environment token: $(if ($envToken) { 'available' } else { 'not set' })"
+    Write-Host "  Saved token file:  $(if ($tokenFile) { $tokenFile } else { 'LOCALAPPDATA is not set' })"
+    if ($storedExists) {
+        if ($storedToken) {
+            Write-Host "  Saved token:       readable"
+        }
+        elseif ($script:StoredTokenError) {
+            Write-Host "  Saved token:       found, but not readable"
+            Write-Host "  Saved token error: $script:StoredTokenError"
+        }
+        else {
+            Write-Host "  Saved token:       found, but empty"
+        }
+    }
+    else {
+        Write-Host "  Saved token:       not found"
+    }
+    Write-Host "  GitHub CLI:        $(if ($ghCommand) { 'found' } else { 'not found' })"
+    Write-Host "  GitHub CLI token:  $(if ($ghToken) { 'available' } else { 'not available' })"
+    Write-Host "  Active auth:       $(if ($activeToken) { $script:GitHubTokenSource } else { 'none' })"
+
+    if (-not $activeToken) {
+        Write-Host ""
+        Write-Host "No usable auth token was found. Run auth.ps1 again from the same Windows user that runs the hotkey."
+    }
 }
 
 function New-GitHubHeaders([string]$Accept = "application/vnd.github+json") {
@@ -228,7 +292,7 @@ function Invoke-GitHubJson([string]$PathOrUrl, [switch]$Allow404) {
 
         $message = Get-ErrorMessageFromResponse $_
         if ($status -eq 403 -and $message.ToLowerInvariant().Contains("rate limit") -and -not (Get-GitHubToken)) {
-            $message = "$message Run auth.ps1 or set GITHUB_TOKEN to raise the limit."
+            $message = "$message Run auth.ps1 or run this script with -AuthStatus to check where auth is missing."
         }
         if ($status) {
             throw "GitHub request failed ($status): $message"
@@ -1199,6 +1263,10 @@ function Invoke-RunOnce([string]$RepoText) {
 try {
     if ($Help) {
         Show-Help
+        exit 0
+    }
+    if ($AuthStatus) {
+        Show-AuthStatus
         exit 0
     }
     if ($Limit -lt 1) {

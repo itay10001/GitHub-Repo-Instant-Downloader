@@ -160,6 +160,12 @@ powershell -ExecutionPolicy Bypass -File .\auth.ps1 -Clear
 
 Advanced users can also set `GITHUB_TOKEN` for the current terminal session, or sign in with the GitHub CLI. The app checks for auth in this order: `GITHUB_TOKEN`, saved token from `auth.ps1`, then `gh auth token`.
 
+To check authentication without printing your token:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\app\github_repo_download_finder.ps1 -AuthStatus
+```
+
 ## Python Version
 
 There is also a cross-platform Python version:
