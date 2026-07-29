@@ -1,13 +1,13 @@
 @echo off
 setlocal
 
-set "SCRIPT=%~dp0uninstall.ps1"
+set "SCRIPT=%~dp0resources\uninstall.ps1"
 
 if not exist "%SCRIPT%" (
     echo Missing uninstall script:
     echo %SCRIPT%
     echo.
-    echo Keep this uninstaller in the same folder as uninstall.ps1.
+    echo Keep this uninstaller in the same folder as the resources folder.
     echo.
     pause
     exit /b 1

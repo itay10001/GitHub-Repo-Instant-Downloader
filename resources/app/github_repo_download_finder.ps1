@@ -23,9 +23,9 @@ $ChangelogCandidates = @(
     "docs/CHANGELOG.md"
 )
 $InstallScriptCandidates = @(
+    "Install.bat",
     "install.ps1",
     "setup.ps1",
-    "install.bat",
     "setup.bat",
     "install.cmd",
     "setup.cmd"
@@ -61,7 +61,7 @@ Examples:
   .\github_repo_download_finder.ps1 owner/repo -DownloadLatest -OutputDir "$env:USERPROFILE\Downloads"
 
 Authenticate once for private repos or higher rate limits:
-  powershell -ExecutionPolicy Bypass -File .\auth.ps1
+  powershell -ExecutionPolicy Bypass -File .\resources\auth.ps1
 
 You can also set GITHUB_TOKEN or sign in with the GitHub CLI.
 "@ | Write-Host
@@ -235,7 +235,7 @@ function Show-AuthStatus {
 
     if (-not $activeToken) {
         Write-Host ""
-        Write-Host "No usable auth token was found. Run auth.ps1 again from the same Windows user that runs the hotkey."
+        Write-Host "No usable auth token was found. Run resources\auth.ps1 again from the same Windows user that runs the hotkey."
     }
 }
 
@@ -292,7 +292,7 @@ function Invoke-GitHubJson([string]$PathOrUrl, [switch]$Allow404) {
 
         $message = Get-ErrorMessageFromResponse $_
         if ($status -eq 403 -and $message.ToLowerInvariant().Contains("rate limit") -and -not (Get-GitHubToken)) {
-            $message = "$message Run auth.ps1 or run this script with -AuthStatus to check where auth is missing."
+            $message = "$message Run resources\auth.ps1 or run this script with -AuthStatus to check where auth is missing."
         }
         if ($status) {
             throw "GitHub request failed ($status): $message"

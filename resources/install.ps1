@@ -16,6 +16,9 @@ function Get-ProjectRoot {
     if (-not $root) {
         $root = (Get-Location).Path
     }
+    if ((Split-Path -Leaf $root) -ieq "resources") {
+        $root = Split-Path -Parent $root
+    }
     return $root
 }
 
@@ -88,12 +91,10 @@ function Copy-AppFiles([string]$SourceRoot, [string]$TargetRoot) {
     New-Item -ItemType Directory -Path $TargetRoot -Force | Out-Null
 
     $items = @(
-        "app",
-        "hotkey",
+        "resources",
         "Install.bat",
         "Uninstall.bat",
         "GitHub Repo Downloader.bat",
-        "auth.ps1",
         "README.md",
         "LICENSE"
     )
@@ -113,7 +114,7 @@ function Copy-AppFiles([string]$SourceRoot, [string]$TargetRoot) {
 }
 
 function Write-HotkeyConfig([string]$TargetRoot, [string]$HotkeyValue) {
-    $hotkeyDir = Join-Path $TargetRoot "hotkey"
+    $hotkeyDir = Join-Path $TargetRoot "resources\hotkey"
     New-Item -ItemType Directory -Path $hotkeyDir -Force | Out-Null
 
     $configPath = Join-Path $hotkeyDir "github_repo_download_finder_hotkey.ini"
@@ -146,8 +147,8 @@ function Start-HotkeyScript([string]$AhkPath, [string]$HotkeyScript) {
 }
 
 $projectRoot = Get-ProjectRoot
-$mainScript = Join-Path $projectRoot "app\github_repo_download_finder.ps1"
-$hotkeySource = Join-Path $projectRoot "hotkey\github_repo_download_finder_hotkey.ahk"
+$mainScript = Join-Path $projectRoot "resources\app\github_repo_download_finder.ps1"
+$hotkeySource = Join-Path $projectRoot "resources\hotkey\github_repo_download_finder_hotkey.ahk"
 
 if (-not (Test-Path -LiteralPath $mainScript)) {
     throw "Run this setup from the GitHub Repo Download Finder project folder."
@@ -171,7 +172,7 @@ if (-not $autoHotkeyPath) {
 Write-Step "Installing app files to $InstallDir"
 Copy-AppFiles $projectRoot $InstallDir
 
-$hotkeyScript = Join-Path $InstallDir "hotkey\github_repo_download_finder_hotkey.ahk"
+$hotkeyScript = Join-Path $InstallDir "resources\hotkey\github_repo_download_finder_hotkey.ahk"
 Write-HotkeyConfig $InstallDir $Hotkey | Out-Null
 
 Write-Step "Registering startup hotkey: $Hotkey"

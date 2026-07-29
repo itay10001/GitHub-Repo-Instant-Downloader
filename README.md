@@ -32,10 +32,10 @@ For the normal Windows install, double-click:
 Install.bat
 ```
 
-Do not double-click `install.ps1`; Windows may open PowerShell scripts in Notepad. If you prefer PowerShell, run this from the extracted folder:
+Do not double-click PowerShell scripts; Windows may open `.ps1` files in Notepad. If you prefer PowerShell, run this from the extracted folder:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\install.ps1
+powershell -ExecutionPolicy Bypass -File .\resources\install.ps1
 ```
 
 The installer:
@@ -57,7 +57,7 @@ The hotkey checks the clipboard first. If the clipboard does not contain a GitHu
 To use a different AutoHotkey hotkey string:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\install.ps1 -Hotkey "^!d"
+powershell -ExecutionPolicy Bypass -File .\resources\install.ps1 -Hotkey "^!d"
 ```
 
 To uninstall the hotkey and installed app copy:
@@ -69,7 +69,7 @@ Uninstall.bat
 Or from PowerShell:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\uninstall.ps1
+powershell -ExecutionPolicy Bypass -File .\resources\uninstall.ps1
 ```
 
 ## Run It
@@ -83,7 +83,7 @@ GitHub Repo Downloader.bat
 Or run the PowerShell script directly:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\app\github_repo_download_finder.ps1
+powershell -ExecutionPolicy Bypass -File .\resources\app\github_repo_download_finder.ps1
 ```
 
 Then paste a repo URL such as:
@@ -106,12 +106,12 @@ For the full hotkey experience, tell them to run:
 Install.bat
 ```
 
-The files inside `app` are the background machinery, so they should stay in the folder but your friends do not need to open them.
+The files inside `resources` are the background machinery, so they should stay in the folder but your friends do not need to open them.
 
 You can also pass the repo directly:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\app\github_repo_download_finder.ps1 https://github.com/psf/requests
+powershell -ExecutionPolicy Bypass -File .\resources\app\github_repo_download_finder.ps1 https://github.com/psf/requests
 ```
 
 ## Useful Commands
@@ -119,37 +119,37 @@ powershell -ExecutionPolicy Bypass -File .\app\github_repo_download_finder.ps1 h
 Show summary and latest download links without the menu:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\app\github_repo_download_finder.ps1 owner/repo -NoMenu
+powershell -ExecutionPolicy Bypass -File .\resources\app\github_repo_download_finder.ps1 owner/repo -NoMenu
 ```
 
 Show downloadable versions:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\app\github_repo_download_finder.ps1 owner/repo -Versions
+powershell -ExecutionPolicy Bypass -File .\resources\app\github_repo_download_finder.ps1 owner/repo -Versions
 ```
 
 Show what's new in the latest release:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\app\github_repo_download_finder.ps1 owner/repo -Notes
+powershell -ExecutionPolicy Bypass -File .\resources\app\github_repo_download_finder.ps1 owner/repo -Notes
 ```
 
 Download the recommended latest file into `downloads`:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\app\github_repo_download_finder.ps1 owner/repo -DownloadLatest
+powershell -ExecutionPolicy Bypass -File .\resources\app\github_repo_download_finder.ps1 owner/repo -DownloadLatest
 ```
 
 Print only one URL for shortcuts/automation:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\app\github_repo_download_finder.ps1 owner/repo -BestUrl
+powershell -ExecutionPolicy Bypass -File .\resources\app\github_repo_download_finder.ps1 owner/repo -BestUrl
 ```
 
 Pick a different output folder:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\app\github_repo_download_finder.ps1 owner/repo -DownloadLatest -OutputDir "C:\Users\gilad\Downloads"
+powershell -ExecutionPolicy Bypass -File .\resources\app\github_repo_download_finder.ps1 owner/repo -DownloadLatest -OutputDir "C:\Users\gilad\Downloads"
 ```
 
 ## Private Repos And Rate Limits
@@ -159,7 +159,7 @@ Public repos usually work without setup. Unauthenticated GitHub API requests are
 For private repos or higher GitHub API rate limits, run the auth helper once:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\auth.ps1
+powershell -ExecutionPolicy Bypass -File .\resources\auth.ps1
 ```
 
 It prompts for a GitHub token inside PowerShell and saves it encrypted for your Windows user at `%LOCALAPPDATA%\GitHubRepoDownloadFinder\github_token.securestring`. Use the least permissions possible: public repo/rate-limit use does not need write access, and private repos only need read-only access to the repos you want. Do not paste tokens into chat or commit them to GitHub.
@@ -167,21 +167,21 @@ It prompts for a GitHub token inside PowerShell and saves it encrypted for your 
 If you are running from old Command Prompt and paste does not work, copy the token from GitHub and run:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\auth.ps1 -FromClipboard
+powershell -ExecutionPolicy Bypass -File .\resources\auth.ps1 -FromClipboard
 ```
 
 To remove the saved token:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\auth.ps1 -Clear
+powershell -ExecutionPolicy Bypass -File .\resources\auth.ps1 -Clear
 ```
 
-Advanced users can also set `GITHUB_TOKEN` for the current terminal session, or sign in with the GitHub CLI. The app checks for auth in this order: `GITHUB_TOKEN`, saved token from `auth.ps1`, then `gh auth token`.
+Advanced users can also set `GITHUB_TOKEN` for the current terminal session, or sign in with the GitHub CLI. The app checks for auth in this order: `GITHUB_TOKEN`, saved token from `resources\auth.ps1`, then `gh auth token`.
 
 To check authentication without printing your token:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\app\github_repo_download_finder.ps1 -AuthStatus
+powershell -ExecutionPolicy Bypass -File .\resources\app\github_repo_download_finder.ps1 -AuthStatus
 ```
 
 ## Python Version
@@ -189,15 +189,15 @@ powershell -ExecutionPolicy Bypass -File .\app\github_repo_download_finder.ps1 -
 There is also a cross-platform Python version:
 
 ```powershell
-python .\app\github_repo_download_finder.py owner/repo --no-menu
-python .\app\github_repo_download_finder.py owner/repo --best-url
+python .\resources\app\github_repo_download_finder.py owner/repo --no-menu
+python .\resources\app\github_repo_download_finder.py owner/repo --best-url
 ```
 
 ## Safety
 
 - The tool reads public GitHub repository metadata through GitHub's API.
 - The app itself does not install anything automatically.
-- `install.ps1` can install AutoHotkey v2 with `winget` if AutoHotkey is missing.
+- `resources\install.ps1` can install AutoHotkey v2 with `winget` if AutoHotkey is missing.
 - The hotkey script reads the clipboard and selected text only when you press the configured hotkey.
 - It downloads files only when you choose a download action.
 - For private repos or higher API limits, you can provide your own `GITHUB_TOKEN` environment variable.

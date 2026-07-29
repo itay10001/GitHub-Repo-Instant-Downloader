@@ -79,6 +79,7 @@ OpenGitHubDownloadPicker(*) {
 
 GetGitHubDownloaderLauncher() {
     candidates := [
+        A_ScriptDir "\..\..\GitHub Repo Downloader.bat",
         A_ScriptDir "\..\GitHub Repo Downloader.bat",
         A_ScriptDir "\GitHub Repo Downloader.bat"
     ]

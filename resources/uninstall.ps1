@@ -45,7 +45,7 @@ function Stop-HotkeyScript([string]$HotkeyScript) {
 }
 
 $resolvedInstallDir = Assert-SafeInstallDir $InstallDir
-$hotkeyScript = Join-Path $resolvedInstallDir "hotkey\github_repo_download_finder_hotkey.ahk"
+$hotkeyScript = Join-Path $resolvedInstallDir "resources\hotkey\github_repo_download_finder_hotkey.ahk"
 $shortcutPath = Get-StartupShortcutPath
 
 Write-Step "Stopping hotkey script if it is running"

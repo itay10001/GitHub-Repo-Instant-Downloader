@@ -1,13 +1,13 @@
 @echo off
 setlocal
 
-set "SCRIPT=%~dp0install.ps1"
+set "SCRIPT=%~dp0resources\install.ps1"
 
 if not exist "%SCRIPT%" (
     echo Missing setup script:
     echo %SCRIPT%
     echo.
-    echo Keep this installer in the same folder as install.ps1.
+    echo Keep this installer in the same folder as the resources folder.
     echo.
     pause
     exit /b 1
