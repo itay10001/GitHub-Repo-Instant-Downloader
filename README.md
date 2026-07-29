@@ -142,12 +142,23 @@ powershell -ExecutionPolicy Bypass -File .\app\github_repo_download_finder.ps1 o
 
 ## Private Repos And Rate Limits
 
-Public repos usually work without setup. For private repos or higher GitHub API rate limits, set a GitHub token before running:
+Public repos usually work without setup. Unauthenticated GitHub API requests are limited much more tightly than authenticated requests, so frequent testing can hit the limit.
+
+For private repos or higher GitHub API rate limits, run the auth helper once:
 
 ```powershell
-$env:GITHUB_TOKEN = "your_token_here"
-powershell -ExecutionPolicy Bypass -File .\app\github_repo_download_finder.ps1 owner/private-repo
+powershell -ExecutionPolicy Bypass -File .\auth.ps1
 ```
+
+It prompts for a GitHub token inside PowerShell and saves it encrypted for your Windows user at `%LOCALAPPDATA%\GitHubRepoDownloadFinder\github_token.securestring`. Use the least permissions possible: public repo/rate-limit use does not need write access, and private repos only need read-only access to the repos you want. Do not paste tokens into chat or commit them to GitHub.
+
+To remove the saved token:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\auth.ps1 -Clear
+```
+
+Advanced users can also set `GITHUB_TOKEN` for the current terminal session, or sign in with the GitHub CLI. The app checks for auth in this order: `GITHUB_TOKEN`, saved token from `auth.ps1`, then `gh auth token`.
 
 ## Python Version
 

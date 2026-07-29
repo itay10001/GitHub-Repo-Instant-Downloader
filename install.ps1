@@ -91,6 +91,7 @@ function Copy-AppFiles([string]$SourceRoot, [string]$TargetRoot) {
         "app",
         "hotkey",
         "GitHub Repo Downloader.bat",
+        "auth.ps1",
         "README.md",
         "LICENSE"
     )

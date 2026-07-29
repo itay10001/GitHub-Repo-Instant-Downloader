@@ -29,6 +29,8 @@ $InstallScriptCandidates = @(
     "install.cmd",
     "setup.cmd"
 )
+$script:GitHubTokenLoaded = $false
+$script:CachedGitHubToken = $null
 
 function Show-Help {
     @"
@@ -53,9 +55,107 @@ Examples:
   .\github_repo_download_finder.ps1 owner/repo -Versions
   .\github_repo_download_finder.ps1 owner/repo -DownloadLatest -OutputDir "$env:USERPROFILE\Downloads"
 
-Set GITHUB_TOKEN first for private repos or higher rate limits:
-  `$env:GITHUB_TOKEN = "your_token_here"
+Authenticate once for private repos or higher rate limits:
+  powershell -ExecutionPolicy Bypass -File .\auth.ps1
+
+You can also set GITHUB_TOKEN or sign in with the GitHub CLI.
 "@ | Write-Host
+}
+
+function Convert-SecureStringToPlainText([securestring]$SecureString) {
+    $bstr = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($SecureString)
+    try {
+        return [Runtime.InteropServices.Marshal]::PtrToStringBSTR($bstr)
+    }
+    finally {
+        if ($bstr -ne [IntPtr]::Zero) {
+            [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($bstr)
+        }
+    }
+}
+
+function Get-DefaultTokenFile {
+    if (-not $env:LOCALAPPDATA) {
+        return $null
+    }
+    return (Join-Path (Join-Path $env:LOCALAPPDATA "GitHubRepoDownloadFinder") "github_token.securestring")
+}
+
+function Get-StoredGitHubToken {
+    $tokenFile = Get-DefaultTokenFile
+    if (-not $tokenFile -or -not (Test-Path -LiteralPath $tokenFile)) {
+        return $null
+    }
+
+    try {
+        $encrypted = (Get-Content -LiteralPath $tokenFile -Raw).Trim()
+        if (-not $encrypted) {
+            return $null
+        }
+
+        $secureToken = $encrypted | ConvertTo-SecureString
+        $plainToken = Convert-SecureStringToPlainText $secureToken
+        if ($plainToken -and $plainToken.Trim()) {
+            return $plainToken.Trim()
+        }
+    }
+    catch {
+        return $null
+    }
+
+    return $null
+}
+
+function Get-GitHubCliToken {
+    foreach ($name in @("gh.exe", "gh")) {
+        $command = Get-Command $name -ErrorAction SilentlyContinue | Select-Object -First 1
+        if (-not $command) {
+            continue
+        }
+
+        $executable = $command.Source
+        if (-not $executable) {
+            $executable = $command.Path
+        }
+        if (-not $executable) {
+            $executable = $name
+        }
+
+        try {
+            $token = & $executable auth token 2>$null
+            if ($LASTEXITCODE -eq 0 -and $token) {
+                $tokenText = ($token -join "`n").Trim()
+                if ($tokenText) {
+                    return $tokenText
+                }
+            }
+        }
+        catch {
+        }
+    }
+
+    return $null
+}
+
+function Get-GitHubToken {
+    if ($script:GitHubTokenLoaded) {
+        return $script:CachedGitHubToken
+    }
+
+    $script:GitHubTokenLoaded = $true
+    $token = $env:GITHUB_TOKEN
+
+    if (-not ($token -and $token.Trim())) {
+        $token = Get-StoredGitHubToken
+    }
+    if (-not ($token -and $token.Trim())) {
+        $token = Get-GitHubCliToken
+    }
+    if ($token -and $token.Trim()) {
+        $script:CachedGitHubToken = $token.Trim()
+    }
+
+    return $script:CachedGitHubToken
 }
 
 function New-GitHubHeaders([string]$Accept = "application/vnd.github+json") {
@@ -64,8 +164,9 @@ function New-GitHubHeaders([string]$Accept = "application/vnd.github+json") {
         "User-Agent" = $UserAgent
         "X-GitHub-Api-Version" = "2022-11-28"
     }
-    if ($env:GITHUB_TOKEN) {
-        $headers["Authorization"] = "Bearer $env:GITHUB_TOKEN"
+    $token = Get-GitHubToken
+    if ($token) {
+        $headers["Authorization"] = "Bearer $token"
     }
     return $headers
 }
@@ -109,8 +210,8 @@ function Invoke-GitHubJson([string]$PathOrUrl, [switch]$Allow404) {
         }
 
         $message = Get-ErrorMessageFromResponse $_
-        if ($status -eq 403 -and $message.ToLowerInvariant().Contains("rate limit") -and -not $env:GITHUB_TOKEN) {
-            $message = "$message Set a GITHUB_TOKEN environment variable to raise the limit."
+        if ($status -eq 403 -and $message.ToLowerInvariant().Contains("rate limit") -and -not (Get-GitHubToken)) {
+            $message = "$message Run auth.ps1 or set GITHUB_TOKEN to raise the limit."
         }
         if ($status) {
             throw "GitHub request failed ($status): $message"

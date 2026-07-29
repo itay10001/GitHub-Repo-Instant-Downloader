@@ -15,6 +15,8 @@ import json
 import os
 from pathlib import Path
 import re
+import shutil
+import subprocess
 import sys
 import textwrap
 from typing import Any
@@ -104,7 +106,7 @@ def _clean_repo_name(repo: str) -> str:
 
 class GitHubClient:
     def __init__(self, token: str | None = None, timeout: int = 25) -> None:
-        self.token = token or os.environ.get("GITHUB_TOKEN")
+        self.token = token or os.environ.get("GITHUB_TOKEN") or github_cli_token()
         self.timeout = timeout
 
     def get_json(self, path_or_url: str, *, allow_404: bool = False) -> Any:
@@ -182,7 +184,7 @@ class GitHubClient:
         except HTTPError as exc:
             message = self._read_error_message(exc)
             if exc.code == 403 and "rate limit" in message.lower() and not self.token:
-                message += " Set a GITHUB_TOKEN environment variable to raise the limit."
+                message += " Set GITHUB_TOKEN or sign in with the GitHub CLI to raise the limit."
             raise GitHubError(f"GitHub request failed ({exc.code}): {message}", exc.code) from exc
         except URLError as exc:
             raise GitHubError(f"Could not reach GitHub: {exc.reason}") from exc
@@ -207,6 +209,28 @@ class GitHubClient:
         except json.JSONDecodeError:
             return body[:500]
         return parsed.get("message") or body[:500]
+
+
+def github_cli_token() -> str | None:
+    gh = shutil.which("gh")
+    if not gh:
+        return None
+
+    try:
+        result = subprocess.run(
+            [gh, "auth", "token"],
+            capture_output=True,
+            check=False,
+            text=True,
+            timeout=5,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+
+    token = result.stdout.strip()
+    if result.returncode == 0 and token:
+        return token
+    return None
 
 
 def scan_repo(client: GitHubClient, repo: RepoRef, limit: int) -> ScanResult:
