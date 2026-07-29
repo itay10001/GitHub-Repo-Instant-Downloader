@@ -700,10 +700,25 @@ function Find-Changelog($RepoRef, [string]$DefaultBranch) {
 }
 
 function Find-InstallScript($RepoRef, [string]$DefaultBranch) {
+    $encodedRef = [Uri]::EscapeDataString($DefaultBranch)
+    $items = Invoke-GitHubJson "/repos/$($RepoRef.Owner)/$($RepoRef.Repo)/contents`?ref=$encodedRef" -Allow404
+    if ($null -eq $items) {
+        return $null
+    }
+
+    $candidates = @{}
     foreach ($path in $InstallScriptCandidates) {
-        $text = Get-FileText $RepoRef $path $DefaultBranch
-        if ($null -ne $text) {
-            return $path
+        $candidates[$path.ToLowerInvariant()] = $path
+    }
+
+    foreach ($item in @($items)) {
+        if ($item.type -ne "file" -or -not $item.name) {
+            continue
+        }
+
+        $key = "$($item.name)".ToLowerInvariant()
+        if ($candidates.ContainsKey($key)) {
+            return $candidates[$key]
         }
     }
     return $null
